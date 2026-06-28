@@ -1,0 +1,513 @@
+```html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Asistencia Escolar - Datos Locales</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- QRCode JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- HTML5 QRCode Scanner -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <!-- SheetJS (Para exportar a Excel) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        body { -webkit-tap-highlight-color: transparent; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        #reader { width: 100%; border-radius: 0.75rem; overflow: hidden; border: none !important; }
+        #reader video { border-radius: 0.75rem; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans antialiased min-h-screen flex flex-col relative">
+
+    <header class="bg-blue-600 text-white p-4 shadow-md sticky top-0 z-50 flex justify-between items-center">
+        <h1 class="text-xl font-bold"><i class="fa-solid fa-school mr-2"></i> Mi Clase</h1>
+        <span class="text-xs bg-blue-700 py-1 px-2 rounded-lg"><i class="fa-solid fa-hard-drive mr-1"></i> Modo Local</span>
+    </header>
+
+    <main class="flex-grow p-4 pb-24 max-w-2xl mx-auto w-full">
+        <!-- ALTA DE ALUMNOS -->
+        <section id="view-register" class="tab-content active">
+            <h2 class="text-2xl font-bold mb-4 text-blue-700">Alta de Alumno</h2>
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <form id="form-register" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
+                        <input type="text" id="nombre" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej. Juan Pérez">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Edad</label>
+                            <input type="number" id="edad" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej. 8">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Cumpleaños</label>
+                            <input type="date" id="cumple" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Color Favorito</label>
+                        <input type="text" id="color" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej. Azul">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Animal Favorito</label>
+                        <input type="text" id="animal" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej. Perro">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Alergias (Opcional)</label>
+                        <textarea id="alergias" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej. Maní, Penicilina..."></textarea>
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition mt-4" id="btn-register">
+                        <i class="fa-solid fa-user-plus mr-2"></i> Registrar Alumno
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- LISTA DE ALUMNOS -->
+        <section id="view-list" class="tab-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-blue-700">Mis Alumnos</h2>
+                <span id="student-count" class="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-full">0</span>
+            </div>
+            <div id="students-container" class="space-y-4"></div>
+        </section>
+
+        <!-- ESCANEAR -->
+        <section id="view-scan" class="tab-content">
+            <h2 class="text-2xl font-bold mb-4 text-blue-700">Escanear QR</h2>
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center">
+                <p class="text-sm text-gray-500 mb-4 text-center">Apunta la cámara al código QR del alumno.</p>
+                <div id="reader" class="w-full max-w-sm aspect-square bg-gray-200 flex items-center justify-center rounded-xl"></div>
+                <div id="scan-result" class="mt-4 text-center w-full hidden">
+                    <div class="bg-green-100 text-green-800 p-4 rounded-lg font-bold transition-all transform duration-300 scale-95" id="scan-result-card">
+                        <i class="fa-solid fa-check-circle mr-2 text-2xl"></i> 
+                        <div class="text-sm mt-1">Asistencia Registrada</div>
+                        <div id="scanned-name" class="text-xl mt-1"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- REPORTE Y DATOS (JSON/EXCEL) -->
+        <section id="view-attendance" class="tab-content">
+            <h2 class="text-2xl font-bold mb-4 text-blue-700">Datos y Reportes</h2>
+            
+            <!-- Panel de Control de Datos -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 grid grid-cols-1 gap-3">
+                <p class="text-xs text-gray-500 text-center mb-1">Manejo de Base de Datos</p>
+                
+                <button onclick="window.exportToExcel()" class="w-full bg-green-600 text-white text-sm font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition flex items-center justify-center shadow-sm">
+                    <i class="fa-solid fa-file-excel mr-2 text-lg"></i> Descargar Reporte (Excel)
+                </button>
+                
+                <div class="flex gap-2">
+                    <button onclick="window.exportToJSON()" class="flex-1 bg-gray-800 text-white text-sm font-bold py-3 px-4 rounded-lg hover:bg-gray-900 transition flex items-center justify-center shadow-sm">
+                        <i class="fa-solid fa-download mr-2"></i> Guardar .json
+                    </button>
+                    
+                    <button onclick="document.getElementById('file-upload').click()" class="flex-1 bg-blue-100 text-blue-800 text-sm font-bold py-3 px-4 rounded-lg hover:bg-blue-200 transition flex items-center justify-center shadow-sm border border-blue-200">
+                        <i class="fa-solid fa-upload mr-2"></i> Cargar .json
+                    </button>
+                    <!-- Input oculto para subir archivo -->
+                    <input type="file" id="file-upload" accept=".json" class="hidden" onchange="window.importFromJSON(event)">
+                </div>
+            </div>
+
+            <!-- Asistencia de Hoy -->
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-lg font-bold text-gray-700">Asistencia de Hoy</h3>
+                <span id="current-date" class="text-xs font-semibold bg-gray-100 text-gray-600 py-1 px-3 rounded-full"></span>
+            </div>
+            <div id="attendance-container" class="space-y-4"></div>
+        </section>
+    </main>
+
+    <!-- NAVEGACIÓN -->
+    <nav class="fixed bottom-0 w-full bg-white border-t border-gray-200 shadow-lg pb-safe z-40">
+        <div class="flex justify-around max-w-md mx-auto">
+            <button onclick="switchTab('register')" class="nav-btn flex-1 py-3 text-center text-gray-500 hover:text-blue-600" data-target="view-register"><i class="fa-solid fa-user-plus text-xl block mb-1"></i><span class="text-xs font-medium">Alta</span></button>
+            <button onclick="switchTab('list')" class="nav-btn flex-1 py-3 text-center text-gray-500 hover:text-blue-600" data-target="view-list"><i class="fa-solid fa-users text-xl block mb-1"></i><span class="text-xs font-medium">Alumnos</span></button>
+            <button onclick="switchTab('scan')" class="nav-btn flex-1 py-3 text-center text-gray-500 hover:text-blue-600" data-target="view-scan"><i class="fa-solid fa-qrcode text-xl block mb-1"></i><span class="text-xs font-medium">Escanear</span></button>
+            <button onclick="switchTab('attendance')" class="nav-btn flex-1 py-3 text-center text-gray-500 hover:text-blue-600" data-target="view-attendance"><i class="fa-solid fa-folder-open text-xl block mb-1"></i><span class="text-xs font-medium">Datos</span></button>
+        </div>
+    </nav>
+
+    <!-- MODALES -->
+    <div id="qr-modal" class="fixed inset-0 bg-black bg-opacity-50 z-[100] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-sm flex flex-col items-center shadow-2xl transition-transform scale-95" id="qr-modal-content">
+            <h3 id="qr-modal-name" class="text-xl font-bold mb-2"></h3>
+            <p class="text-sm text-gray-500 mb-6 text-center">Muestra este código al profesor</p>
+            <div id="qrcode-display" class="bg-white p-4 rounded-xl border mb-6"></div>
+            <button onclick="closeQRModal()" class="w-full bg-gray-200 font-bold py-3 px-4 rounded-lg">Cerrar</button>
+        </div>
+    </div>
+
+    <div id="alert-modal" class="fixed inset-0 bg-black bg-opacity-50 z-[100] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl transition-transform scale-95" id="alert-modal-content">
+            <h3 id="alert-title" class="text-lg font-bold mb-2"></h3>
+            <p id="alert-message" class="text-gray-600 mb-6"></p>
+            <button onclick="closeAlertModal()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg">Entendido</button>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // SISTEMA DE BASE DE DATOS LOCAL (JSON)
+        // ==========================================
+        const DB_KEY = 'asistencia_db_v1';
+        
+        let appData = {
+            students: [],
+            attendance: {} // Formato: { "YYYY-MM-DD": [ { studentId: "...", time: "...", note: "..." } ] }
+        };
+
+        let html5QrcodeScanner = null;
+
+        const getTodayString = () => {
+            const now = new Date();
+            return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        };
+        document.getElementById('current-date').textContent = new Date().toLocaleDateString('es-ES', { weekday: 'short', month: 'short', day: 'numeric' });
+
+        // --- FUNCIONES DE GUARDADO Y CARGA (LOCALSTORAGE) ---
+        function saveToLocal() {
+            localStorage.setItem(DB_KEY, JSON.stringify(appData));
+            updateCounters();
+        }
+
+        function loadFromLocal() {
+            const savedData = localStorage.getItem(DB_KEY);
+            if (savedData) {
+                try {
+                    appData = JSON.parse(savedData);
+                    // Asegurar estructura
+                    if (!appData.students) appData.students = [];
+                    if (!appData.attendance) appData.attendance = {};
+                } catch (e) {
+                    console.error("Error leyendo datos locales", e);
+                }
+            }
+            updateCounters();
+        }
+
+        function updateCounters() {
+            document.getElementById('student-count').textContent = appData.students.length;
+        }
+
+        // Cargar datos al iniciar
+        loadFromLocal();
+
+
+        // --- NAVEGACIÓN ---
+        window.switchTab = function(tabName) {
+            if (tabName !== 'scan' && html5QrcodeScanner) {
+                html5QrcodeScanner.clear().catch(e => console.error(e));
+                html5QrcodeScanner = null;
+            }
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.getElementById(`view-${tabName}`).classList.add('active');
+            
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-blue-600'); btn.classList.add('text-gray-500');
+            });
+            const activeBtn = document.querySelector(`[data-target="view-${tabName}"]`);
+            if (activeBtn) {
+                activeBtn.classList.remove('text-gray-500'); activeBtn.classList.add('text-blue-600');
+            }
+            
+            if (tabName === 'list') renderStudents();
+            if (tabName === 'attendance') renderAttendance();
+            if (tabName === 'scan') startScanner();
+        };
+
+        // --- ALTA DE ALUMNOS ---
+        document.getElementById('form-register').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const newStudent = {
+                id: 'std_' + Math.random().toString(36).substr(2, 9),
+                nombre: document.getElementById('nombre').value.trim(),
+                edad: document.getElementById('edad').value,
+                cumple: document.getElementById('cumple').value,
+                color: document.getElementById('color').value,
+                animal: document.getElementById('animal').value,
+                alergias: document.getElementById('alergias').value || 'Ninguna'
+            };
+
+            appData.students.push(newStudent);
+            saveToLocal(); // Guardar
+            
+            this.reset();
+            window.showAlert("¡Éxito!", `Alumno ${newStudent.nombre} registrado correctamente.`);
+            window.switchTab('list');
+        });
+
+        // --- RENDERIZAR ALUMNOS ---
+        function renderStudents() {
+            const container = document.getElementById('students-container');
+            if (appData.students.length === 0) {
+                container.innerHTML = '<div class="text-center py-10 bg-white rounded-xl border border-gray-100"><i class="fa-solid fa-users-slash text-gray-300 text-4xl mb-3"></i><p class="text-gray-500">Aún no hay alumnos registrados.</p></div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            // Ordenar alfabéticamente
+            const sortedStudents = [...appData.students].sort((a,b) => a.nombre.localeCompare(b.nombre));
+
+            sortedStudents.forEach(student => {
+                const card = document.createElement('div');
+                card.className = 'bg-white p-4 rounded-xl shadow-sm border flex justify-between items-center';
+                card.innerHTML = `
+                    <div class="flex-1 overflow-hidden">
+                        <h3 class="font-bold text-lg truncate">${student.nombre}</h3>
+                        <div class="flex flex-wrap gap-2 mt-1">
+                            <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-600"><i class="fa-solid fa-cake-candles mr-1"></i>${student.edad}a</span>
+                            <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-600"><i class="fa-solid fa-paw mr-1"></i>${student.animal}</span>
+                        </div>
+                    </div>
+                    <button onclick="window.openQRModal('${student.id}', '${student.nombre}')" class="ml-4 bg-blue-100 text-blue-700 w-12 h-12 flex items-center justify-center rounded-lg hover:bg-blue-200 transition">
+                        <i class="fa-solid fa-qrcode text-xl"></i>
+                    </button>
+                    <button onclick="window.deleteStudent('${student.id}')" class="ml-2 bg-red-50 text-red-500 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-red-100 transition">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        window.deleteStudent = function(id) {
+            // Utilizamos confirm nativo por simplicidad en borrados, aunque los modales son mejores para alertas.
+            if(confirm("¿Estás seguro de eliminar a este alumno? Sus datos de asistencia se conservarán, pero no aparecerá en la lista.")) {
+                appData.students = appData.students.filter(s => s.id !== id);
+                saveToLocal();
+                renderStudents();
+            }
+        };
+
+        // --- SCANNER ---
+        function startScanner() {
+            document.getElementById('scan-result').classList.add('hidden');
+            html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+            
+            html5QrcodeScanner.render((decodedText) => {
+                html5QrcodeScanner.pause(true);
+                const student = appData.students.find(s => s.id === decodedText);
+                
+                if (student) {
+                    const today = getTodayString();
+                    if (!appData.attendance[today]) appData.attendance[today] = [];
+                    
+                    const alreadyScanned = appData.attendance[today].find(a => a.studentId === student.id);
+                    
+                    if (!alreadyScanned) {
+                        // Guardar asistencia
+                        appData.attendance[today].push({
+                            studentId: student.id,
+                            time: new Date().toLocaleTimeString('es-ES', {hour: '2-digit', minute:'2-digit'}),
+                            note: ''
+                        });
+                        saveToLocal();
+
+                        // Animación
+                        document.getElementById('scanned-name').textContent = student.nombre;
+                        document.getElementById('scan-result').classList.remove('hidden');
+                        setTimeout(() => document.getElementById('scan-result-card').classList.remove('scale-95'), 10);
+                        
+                        setTimeout(() => {
+                            document.getElementById('scan-result-card').classList.add('scale-95');
+                            setTimeout(() => { document.getElementById('scan-result').classList.add('hidden'); html5QrcodeScanner.resume(); }, 300);
+                        }, 2500);
+                    } else {
+                        window.showAlert("Atención", "Asistencia ya registrada hoy.");
+                        setTimeout(() => html5QrcodeScanner.resume(), 2000);
+                    }
+                } else {
+                    window.showAlert("Error", "QR Inválido o Alumno eliminado.");
+                    setTimeout(() => html5QrcodeScanner.resume(), 2000);
+                }
+            }, () => {});
+        }
+
+        // --- RENDERIZAR REPORTE DE HOY ---
+        function renderAttendance() {
+            const container = document.getElementById('attendance-container');
+            const today = getTodayString();
+            const todayRecords = appData.attendance[today] || [];
+
+            if (todayRecords.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-500 py-8">No hay asistencias registradas hoy.</p>';
+                return;
+            }
+
+            container.innerHTML = '';
+            todayRecords.forEach((record) => {
+                const student = appData.students.find(s => s.id === record.studentId);
+                const nombre = student ? student.nombre : 'Alumno Eliminado';
+                const inicial = student ? student.nombre.charAt(0).toUpperCase() : '?';
+
+                const card = document.createElement('div');
+                card.className = 'bg-white p-4 rounded-xl shadow-sm border border-gray-100';
+                card.innerHTML = `
+                    <div class="flex justify-between items-center mb-3">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold mr-3">
+                                ${inicial}
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-gray-800 leading-tight">${nombre}</h3>
+                                <p class="text-xs text-gray-500"><i class="fa-regular fa-clock"></i> ${record.time}</p>
+                            </div>
+                        </div>
+                        <span class="text-green-500 bg-green-50 w-8 h-8 rounded-full flex items-center justify-center"><i class="fa-solid fa-check"></i></span>
+                    </div>
+                    <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Anotación</label>
+                        <div class="flex space-x-2">
+                            <textarea id="note-${record.studentId}" class="w-full p-2 text-sm bg-white border border-gray-200 rounded-md focus:outline-none resize-none" rows="1">${record.note || ''}</textarea>
+                            <button onclick="window.saveNote('${record.studentId}')" class="bg-blue-50 text-blue-600 px-3 rounded-md hover:bg-blue-100 flex items-center justify-center">
+                                <i class="fa-solid fa-save"></i>
+                            </button>
+                        </div>
+                        <div id="note-saved-${record.studentId}" class="text-xs text-green-600 hidden mt-1"><i class="fa-solid fa-check"></i> Guardado</div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        window.saveNote = function(studentId) {
+            const today = getTodayString();
+            const noteValue = document.getElementById(`note-${studentId}`).value;
+            
+            if (appData.attendance[today]) {
+                const recordIndex = appData.attendance[today].findIndex(r => r.studentId === studentId);
+                if (recordIndex > -1) {
+                    appData.attendance[today][recordIndex].note = noteValue;
+                    saveToLocal(); // Guardar cambios localmente
+                    
+                    document.getElementById(`note-saved-${studentId}`).classList.remove('hidden');
+                    setTimeout(() => document.getElementById(`note-saved-${studentId}`).classList.add('hidden'), 2000);
+                }
+            }
+        };
+
+        // --- MANEJO DE ARCHIVOS JSON ---
+        window.exportToJSON = function() {
+            // Convierte el objeto JavaScript a un string de texto (JSON)
+            const dataStr = JSON.stringify(appData, null, 2);
+            // Crea un "archivo virtual" (Blob)
+            const blob = new Blob([dataStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            
+            // Forzar descarga
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Respaldo_Asistencia_${getTodayString()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            window.showAlert("¡Respaldo Creado!", "El archivo .json se ha descargado a tu dispositivo. Guárdalo bien.");
+        };
+
+        window.importFromJSON = function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    // Validación muy básica
+                    if (importedData.students && importedData.attendance) {
+                        appData = importedData;
+                        saveToLocal();
+                        window.showAlert("¡Datos Restaurados!", "Se ha cargado la información correctamente.");
+                        renderAttendance(); // Refrescar vista
+                    } else {
+                        window.showAlert("Error", "El archivo no tiene el formato correcto.");
+                    }
+                } catch (error) {
+                    window.showAlert("Error", "No se pudo leer el archivo JSON.");
+                }
+                // Limpiar input
+                event.target.value = ''; 
+            };
+            reader.readAsText(file);
+        };
+
+        // --- EXPORTAR A EXCEL ---
+        window.exportToExcel = function() {
+            let excelData = [];
+            
+            // Recorrer todas las fechas en la base de datos
+            Object.keys(appData.attendance).forEach(dateStr => {
+                const records = appData.attendance[dateStr];
+                records.forEach(record => {
+                    const student = appData.students.find(s => s.id === record.studentId);
+                    excelData.push({
+                        'Fecha': dateStr,
+                        'Alumno': student ? student.nombre : 'Alumno Eliminado',
+                        'Hora de Llegada': record.time,
+                        'Anotación': record.note || 'Sin notas'
+                    });
+                });
+            });
+
+            if (excelData.length === 0) {
+                window.showAlert("Sin información", "No hay asistencias registradas para exportar.");
+                return;
+            }
+
+            // Ordenar por fecha
+            excelData.sort((a, b) => b.Fecha.localeCompare(a.Fecha));
+
+            const worksheet = XLSX.utils.json_to_sheet(excelData);
+            worksheet['!cols'] = [{wch: 12}, {wch: 30}, {wch: 15}, {wch: 50}];
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Reporte Asistencia");
+            
+            XLSX.writeFile(workbook, `Reporte_Clase_${getTodayString()}.xlsx`);
+        };
+
+        // --- UI MODALES ---
+        window.openQRModal = (id, nombre) => {
+            document.getElementById('qr-modal-name').textContent = nombre;
+            document.getElementById('qrcode-display').innerHTML = ''; 
+            new QRCode(document.getElementById('qrcode-display'), { text: id, width: 200, height: 200 });
+            document.getElementById('qr-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('qr-modal-content').classList.remove('scale-95'), 10);
+        };
+        window.closeQRModal = () => {
+            document.getElementById('qr-modal-content').classList.add('scale-95');
+            setTimeout(() => document.getElementById('qr-modal').classList.add('hidden'), 300);
+        };
+        window.showAlert = (title, message) => {
+            document.getElementById('alert-title').textContent = title;
+            document.getElementById('alert-message').textContent = message;
+            document.getElementById('alert-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('alert-modal-content').classList.remove('scale-95'), 10);
+        };
+        window.closeAlertModal = () => {
+            document.getElementById('alert-modal-content').classList.add('scale-95');
+            setTimeout(() => document.getElementById('alert-modal').classList.add('hidden'), 300);
+        };
+
+        // Inicializar
+        switchTab('register');
+
+    </script>
+</body>
+</html>
+
+
+```
