@@ -1,0 +1,14 @@
+{
+  "students": [
+    {
+      "id": "std_iyd4j470q",
+      "nombre": "Alyn flores",
+      "edad": "22",
+      "cumple": "2026-06-28",
+      "color": "Rojo",
+      "animal": "Todos",
+      "alergias": "No"
+    }
+  ],
+  "attendance": {}
+}
