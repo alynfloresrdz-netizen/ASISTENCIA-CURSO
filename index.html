@@ -1,0 +1,404 @@
+```html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Asistencia Escolar</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- QRCode JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- HTML5 QRCode Scanner -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <!-- SheetJS (Para exportar a Excel) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        body { -webkit-tap-highlight-color: transparent; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        #reader { width: 100%; border-radius: 0.75rem; overflow: hidden; border: none !important; }
+        #reader video { border-radius: 0.75rem; }
+        .loader {
+            border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid #3b82f6;
+            width: 20px; height: 20px; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans antialiased min-h-screen flex flex-col relative">
+
+    <div id="sync-status" class="fixed top-0 left-0 w-full bg-blue-500 text-white text-xs text-center py-1 z-[60] flex items-center justify-center space-x-2">
+        <div class="loader" id="sync-loader"></div>
+        <span id="sync-text">Conectando a la nube...</span>
+    </div>
+
+    <header class="bg-blue-600 text-white p-4 shadow-md sticky top-0 z-50 mt-6">
+        <h1 class="text-xl font-bold text-center"><i class="fa-solid fa-school mr-2"></i> Mi Clase</h1>
+    </header>
+
+    <main class="flex-grow p-4 pb-24 max-w-2xl mx-auto w-full">
+        <!-- ALTA DE ALUMNOS -->
+        <section id="view-register" class="tab-content active">
+            <h2 class="text-2xl font-bold mb-4 text-blue-700">Alta de Alumno</h2>
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <form id="form-register" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
+                        <input type="text" id="nombre" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Edad</label>
+                            <input type="number" id="edad" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Cumpleaños</label>
+                            <input type="date" id="cumple" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Color Favorito</label>
+                        <input type="text" id="color" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Animal Favorito</label>
+                        <input type="text" id="animal" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Alergias (Opcional)</label>
+                        <textarea id="alergias" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition mt-4 disabled:opacity-50" id="btn-register">
+                        <i class="fa-solid fa-user-plus mr-2"></i> Registrar Alumno
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- LISTA DE ALUMNOS -->
+        <section id="view-list" class="tab-content">
+            <h2 class="text-2xl font-bold mb-4 text-blue-700">Mis Alumnos</h2>
+            <div id="students-container" class="space-y-4"></div>
+        </section>
+
+        <!-- ESCANEAR -->
+        <section id="view-scan" class="tab-content">
+            <h2 class="text-2xl font-bold mb-4 text-blue-700">Escanear QR</h2>
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center">
+                <div id="reader" class="w-full max-w-sm aspect-square bg-gray-200 flex items-center justify-center rounded-xl"></div>
+                <div id="scan-result" class="mt-4 text-center w-full hidden">
+                    <div class="bg-green-100 text-green-800 p-4 rounded-lg font-bold transition-all transform duration-300 scale-95" id="scan-result-card">
+                        <i class="fa-solid fa-check-circle mr-2 text-2xl"></i> 
+                        <div class="text-sm mt-1">Asistencia Registrada</div>
+                        <div id="scanned-name" class="text-xl mt-1"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- REPORTE -->
+        <section id="view-attendance" class="tab-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-blue-700">Reporte de Hoy</h2>
+                <button onclick="window.exportToExcel()" id="btn-export" class="bg-green-600 text-white text-sm font-bold py-1.5 px-3 rounded-full hover:bg-green-700 transition flex items-center shadow-sm">
+                    <i class="fa-solid fa-file-excel mr-2"></i> Exportar
+                </button>
+            </div>
+            <div id="attendance-container" class="space-y-4"></div>
+        </section>
+    </main>
+
+    <!-- NAVEGACIÓN -->
+    <nav class="fixed bottom-0 w-full bg-white border-t border-gray-200 shadow-lg pb-safe z-40">
+        <div class="flex justify-around max-w-md mx-auto">
+            <button onclick="switchTab('register')" class="nav-btn flex-1 py-3 text-center text-gray-500 hover:text-blue-600" data-target="view-register"><i class="fa-solid fa-user-plus text-xl block mb-1"></i><span class="text-xs font-medium">Alta</span></button>
+            <button onclick="switchTab('list')" class="nav-btn flex-1 py-3 text-center text-gray-500 hover:text-blue-600" data-target="view-list"><i class="fa-solid fa-users text-xl block mb-1"></i><span class="text-xs font-medium">Alumnos</span></button>
+            <button onclick="switchTab('scan')" class="nav-btn flex-1 py-3 text-center text-gray-500 hover:text-blue-600" data-target="view-scan"><i class="fa-solid fa-qrcode text-xl block mb-1"></i><span class="text-xs font-medium">Escanear</span></button>
+            <button onclick="switchTab('attendance')" class="nav-btn flex-1 py-3 text-center text-gray-500 hover:text-blue-600" data-target="view-attendance"><i class="fa-solid fa-clipboard-check text-xl block mb-1"></i><span class="text-xs font-medium">Reporte</span></button>
+        </div>
+    </nav>
+
+    <!-- MODALES -->
+    <div id="qr-modal" class="fixed inset-0 bg-black bg-opacity-50 z-[100] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-sm flex flex-col items-center shadow-2xl transition-transform scale-95" id="qr-modal-content">
+            <h3 id="qr-modal-name" class="text-xl font-bold mb-2"></h3>
+            <div id="qrcode-display" class="bg-white p-4 rounded-xl border mb-6"></div>
+            <button onclick="closeQRModal()" class="w-full bg-gray-200 font-bold py-3 px-4 rounded-lg">Cerrar</button>
+        </div>
+    </div>
+
+    <div id="alert-modal" class="fixed inset-0 bg-black bg-opacity-50 z-[100] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl transition-transform scale-95" id="alert-modal-content">
+            <h3 id="alert-title" class="text-lg font-bold mb-2"></h3>
+            <p id="alert-message" class="text-gray-600 mb-6"></p>
+            <button onclick="closeAlertModal()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg">Entendido</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // =========================================================================
+        // ⚠️ PEGA TUS LLAVES DE FIREBASE AQUÍ ABAJO ⚠️
+        // Reemplaza TODO este bloque "firebaseConfig" con el que te dio Firebase
+        // =========================================================================
+        const firebaseConfig = {
+            apiKey: "TU_API_KEY",
+            authDomain: "TU_PROYECTO.firebaseapp.com",
+            projectId: "TU_PROYECTO",
+            storageBucket: "TU_PROYECTO.appspot.com",
+            messagingSenderId: "TUS_NUMEROS",
+            appId: "TU_APP_ID"
+        };
+        // =========================================================================
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let students = [], todayAttendance = [], html5QrcodeScanner = null, currentUser = null, qrcode = null;
+
+        const getTodayString = () => {
+            const now = new Date();
+            return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        };
+
+        const updateSyncStatus = (status) => {
+            const bar = document.getElementById('sync-status');
+            const text = document.getElementById('sync-text');
+            const loader = document.getElementById('sync-loader');
+            if (status === 'connecting') {
+                bar.className = 'fixed top-0 left-0 w-full bg-blue-500 text-white text-xs text-center py-1 z-[60] flex items-center justify-center space-x-2';
+                text.textContent = 'Conectando a la nube...';
+                loader.style.display = 'block';
+            } else if (status === 'connected') {
+                bar.className = 'fixed top-0 left-0 w-full bg-green-500 text-white text-xs text-center py-1 z-[60] flex items-center justify-center space-x-2 transition-all duration-500';
+                text.textContent = 'Datos sincronizados';
+                loader.style.display = 'none';
+                setTimeout(() => { bar.style.transform = 'translateY(-100%)'; }, 2000);
+            }
+        };
+
+        // INICIAR SESIÓN ANÓNIMA
+        signInAnonymously(auth).catch(error => {
+            console.error("Error Auth:", error);
+            window.showAlert("Error", "Fallo al conectar con la base de datos.");
+        });
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                document.getElementById('btn-register').disabled = false;
+                
+                // ESCUCHAR BASE DE DATOS EN TIEMPO REAL
+                const studentsRef = collection(db, 'usuarios', currentUser.uid, 'alumnos');
+                const dailyRef = doc(db, 'usuarios', currentUser.uid, 'asistencias', getTodayString());
+
+                onSnapshot(studentsRef, (snapshot) => {
+                    students = [];
+                    snapshot.forEach((doc) => { students.push({ id: doc.id, ...doc.data() }); });
+                    if (document.getElementById('view-list').classList.contains('active')) renderStudents();
+                    updateSyncStatus('connected');
+                });
+
+                onSnapshot(dailyRef, (docSnap) => {
+                    todayAttendance = docSnap.exists() ? (docSnap.data().records || []) : [];
+                    if (document.getElementById('view-attendance').classList.contains('active')) renderAttendance();
+                });
+            }
+        });
+
+        // NAVEGACIÓN
+        window.switchTab = function(tabName) {
+            if (tabName !== 'scan' && html5QrcodeScanner) {
+                html5QrcodeScanner.clear().catch(e => console.error(e));
+                html5QrcodeScanner = null;
+            }
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.getElementById(`view-${tabName}`).classList.add('active');
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-blue-600'); btn.classList.add('text-gray-500');
+            });
+            const activeBtn = document.querySelector(`[data-target="view-${tabName}"]`);
+            if (activeBtn) {
+                activeBtn.classList.remove('text-gray-500'); activeBtn.classList.add('text-blue-600');
+            }
+            if (tabName === 'list') renderStudents();
+            if (tabName === 'attendance') renderAttendance();
+            if (tabName === 'scan') startScanner();
+        };
+
+        // REGISTRAR ALUMNO
+        document.getElementById('form-register').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            if (!currentUser) return;
+            const btn = document.getElementById('btn-register');
+            btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Guardando...';
+
+            const newStudent = {
+                nombre: document.getElementById('nombre').value,
+                edad: document.getElementById('edad').value,
+                cumple: document.getElementById('cumple').value,
+                color: document.getElementById('color').value,
+                animal: document.getElementById('animal').value,
+                alergias: document.getElementById('alergias').value || 'Ninguna'
+            };
+
+            try {
+                await addDoc(collection(db, 'usuarios', currentUser.uid, 'alumnos'), newStudent);
+                this.reset();
+                window.showAlert("¡Éxito!", `Alumno guardado.`);
+                window.switchTab('list');
+            } catch (error) {
+                window.showAlert("Error", "No se guardó.");
+            } finally {
+                btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-user-plus mr-2"></i> Registrar Alumno';
+            }
+        });
+
+        // RENDERIZAR ALUMNOS
+        function renderStudents() {
+            const container = document.getElementById('students-container');
+            container.innerHTML = students.length === 0 ? '<p class="text-gray-500 text-center py-8">Aún no hay alumnos.</p>' : '';
+            students.forEach(student => {
+                const card = document.createElement('div');
+                card.className = 'bg-white p-4 rounded-xl shadow-sm border flex justify-between items-center';
+                card.innerHTML = `
+                    <div class="flex-1 overflow-hidden">
+                        <h3 class="font-bold text-lg truncate">${student.nombre}</h3>
+                        <div class="flex flex-wrap gap-2 mt-1">
+                            <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-600"><i class="fa-solid fa-cake-candles mr-1"></i>${student.edad}a</span>
+                            <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-600"><i class="fa-solid fa-paw mr-1"></i>${student.animal}</span>
+                        </div>
+                    </div>
+                    <button onclick="window.openQRModal('${student.id}', '${student.nombre}')" class="ml-4 bg-blue-100 text-blue-700 w-12 h-12 flex items-center justify-center rounded-lg">
+                        <i class="fa-solid fa-qrcode text-xl"></i>
+                    </button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // SCANNER
+        function startScanner() {
+            document.getElementById('scan-result').classList.add('hidden');
+            html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+            html5QrcodeScanner.render(async (decodedText) => {
+                if (!currentUser) return;
+                html5QrcodeScanner.pause(true);
+                const student = students.find(s => s.id === decodedText);
+                
+                if (student) {
+                    if (!todayAttendance.find(a => a.studentId === student.id)) {
+                        const newRecord = { studentId: student.id, time: new Date().toLocaleTimeString('es-ES', {hour: '2-digit', minute:'2-digit'}), note: '' };
+                        await setDoc(doc(db, 'usuarios', currentUser.uid, 'asistencias', getTodayString()), { records: [...todayAttendance, newRecord] }, { merge: true });
+                        
+                        document.getElementById('scanned-name').textContent = student.nombre;
+                        document.getElementById('scan-result').classList.remove('hidden');
+                        setTimeout(() => { document.getElementById('scan-result').classList.add('hidden'); html5QrcodeScanner.resume(); }, 3000);
+                    } else {
+                        window.showAlert("Atención", "Asistencia ya registrada hoy.");
+                        setTimeout(() => html5QrcodeScanner.resume(), 2000);
+                    }
+                } else {
+                    window.showAlert("Error", "QR Inválido.");
+                    setTimeout(() => html5QrcodeScanner.resume(), 2000);
+                }
+            }, () => {});
+        }
+
+        // RENDERIZAR REPORTE
+        function renderAttendance() {
+            const container = document.getElementById('attendance-container');
+            container.innerHTML = todayAttendance.length === 0 ? '<p class="text-center text-gray-500 py-8">Sin asistencias hoy.</p>' : '';
+            todayAttendance.forEach((record) => {
+                const student = students.find(s => s.id === record.studentId);
+                if(!student) return;
+                const card = document.createElement('div');
+                card.className = 'bg-white p-4 rounded-xl shadow-sm border';
+                card.innerHTML = `
+                    <div class="flex justify-between items-center mb-3">
+                        <div class="flex items-center">
+                            <h3 class="font-bold mr-3">${student.nombre}</h3>
+                            <p class="text-xs text-gray-500"><i class="fa-regular fa-clock"></i> ${record.time}</p>
+                        </div>
+                    </div>
+                    <div class="flex space-x-2">
+                        <textarea id="note-${record.studentId}" class="w-full p-2 text-sm border rounded-md" rows="1">${record.note || ''}</textarea>
+                        <button onclick="window.saveNote('${record.studentId}')" class="bg-blue-50 text-blue-600 px-3 rounded-md" id="btn-save-${record.studentId}">
+                            <i class="fa-solid fa-save"></i>
+                        </button>
+                    </div>
+                    <div id="note-saved-${record.studentId}" class="text-xs text-green-600 hidden mt-1">Guardado</div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        window.saveNote = async function(studentId) {
+            const noteValue = document.getElementById(`note-${studentId}`).value;
+            const updatedRecords = todayAttendance.map(r => r.studentId === studentId ? { ...r, note: noteValue } : r);
+            await setDoc(doc(db, 'usuarios', currentUser.uid, 'asistencias', getTodayString()), { records: updatedRecords }, { merge: true });
+            document.getElementById(`note-saved-${studentId}`).classList.remove('hidden');
+            setTimeout(() => document.getElementById(`note-saved-${studentId}`).classList.add('hidden'), 2000);
+        };
+
+        // EXPORTAR EXCEL
+        window.exportToExcel = async function() {
+            if (!currentUser) return;
+            const btn = document.getElementById('btn-export');
+            btn.innerHTML = 'Procesando...';
+            try {
+                const querySnapshot = await getDocs(collection(db, 'usuarios', currentUser.uid, 'asistencias'));
+                let excelData = [];
+                querySnapshot.forEach((docSnap) => {
+                    const dateStr = docSnap.id;
+                    (docSnap.data().records || []).forEach(record => {
+                        const student = students.find(s => s.id === record.studentId);
+                        excelData.push({ 'Fecha': dateStr, 'Alumno': student ? student.nombre : 'Eliminado', 'Llegada': record.time, 'Nota': record.note });
+                    });
+                });
+                if (excelData.length === 0) return window.showAlert("Sin datos", "No hay asistencias.");
+                excelData.sort((a, b) => b.Fecha.localeCompare(a.Fecha));
+                const worksheet = XLSX.utils.json_to_sheet(excelData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Asistencia");
+                XLSX.writeFile(workbook, `Reporte_Clase_${getTodayString()}.xlsx`);
+            } catch (error) { window.showAlert("Error", "Fallo al exportar."); } 
+            finally { btn.innerHTML = '<i class="fa-solid fa-file-excel mr-2"></i> Exportar'; }
+        };
+
+        // UI MODALES
+        window.openQRModal = (id, nombre) => {
+            document.getElementById('qr-modal-name').textContent = nombre;
+            document.getElementById('qrcode-display').innerHTML = ''; 
+            new QRCode(document.getElementById('qrcode-display'), { text: id, width: 200, height: 200 });
+            document.getElementById('qr-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('qr-modal-content').classList.remove('scale-95'), 10);
+        };
+        window.closeQRModal = () => {
+            document.getElementById('qr-modal-content').classList.add('scale-95');
+            setTimeout(() => document.getElementById('qr-modal').classList.add('hidden'), 300);
+        };
+        window.showAlert = (title, message) => {
+            document.getElementById('alert-title').textContent = title;
+            document.getElementById('alert-message').textContent = message;
+            document.getElementById('alert-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('alert-modal-content').classList.remove('scale-95'), 10);
+        };
+        window.closeAlertModal = () => {
+            document.getElementById('alert-modal-content').classList.add('scale-95');
+            setTimeout(() => document.getElementById('alert-modal').classList.add('hidden'), 300);
+        };
+    </script>
+</body>
+</html>
+
+
+```
